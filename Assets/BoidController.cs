@@ -9,21 +9,13 @@ namespace TrailBoids
 
         [SerializeField] int _spawnCount = 10;
         [SerializeField] float _spawnRadius = 4;
+
         [SerializeField] float _velocity = 6;
-        [SerializeField, Range(0, 1)] float _velocityRandomness = 0.5f;
+        [SerializeField, Range(0, 1)] float _velocityVariance = 0.5f;
+        [SerializeField] Vector3 _scroll = Vector3.zero;
+
         [SerializeField] float _rotationSpeed = 4;
         [SerializeField] float _neighborDistance = 2;
-
-        #endregion
-
-        #region Internal properties
-
-        GameObject Template {
-            get {
-                foreach (Transform tr in transform) return tr.gameObject;
-                return null;
-            }
-        }
 
         #endregion
 
@@ -37,13 +29,13 @@ namespace TrailBoids
             public GameObject gameObject;
         }
 
-        List<Boid> _boids;
+        List<Boid> _boids = new List<Boid>();
 
         #endregion
 
         #region Boid behavior
 
-        // Calculates a separation vector from a boid with another.
+        // Calculates a separation vector from a boid with another boid.
         Vector3 GetSeparationVector(Boid self, Boid target)
         {
             var diff = target.position - self.position;
@@ -98,14 +90,16 @@ namespace TrailBoids
         void AdvanceBoid(Boid self)
         {
             var noise = Mathf.PerlinNoise(Time.time * 0.5f, self.noiseOffset) * 2 - 1;
-            var velocity = _velocity * (1 + noise * _velocityRandomness);
+            var velocity = _velocity * (1 + noise * _velocityVariance);
             var forward = self.rotation * Vector3.forward;
-            self.position += forward * velocity * Time.deltaTime;
+            self.position += (forward * velocity + _scroll) * Time.deltaTime;
         }
 
         #endregion
 
         #region Public methods
+
+        GameObject _template;
 
         public void Spawn()
         {
@@ -114,16 +108,16 @@ namespace TrailBoids
 
         public void Spawn(Vector3 position)
         {
-            var go = Instantiate(Template);
+            var go = Instantiate(_template);
+            go.transform.parent = transform;
+            go.SetActive(true);
 
-            var boid = new Boid() {
+            _boids.Add(new Boid() {
                 position = position,
                 rotation = Quaternion.Slerp(transform.rotation, Random.rotation, 0.3f),
                 noiseOffset = Random.value * 10,
                 gameObject = go
-            };
-
-            _boids.Add(boid);
+            });
         }
 
         #endregion
@@ -132,19 +126,22 @@ namespace TrailBoids
 
         void Start()
         {
-            _boids = new List<Boid>();
+            _template = transform.GetChild(0).gameObject;
+            _template.SetActive(false);
+
             for (var i = 0; i < _spawnCount; i++) Spawn();
         }
 
         void Update()
         {
+            foreach (var boid in _boids) SteerBoid(boid);
+            foreach (var boid in _boids) AdvanceBoid(boid);
+
             foreach (var boid in _boids)
             {
-                SteerBoid(boid);
-                AdvanceBoid(boid);
-
-                boid.gameObject.transform.position = boid.position;
-                boid.gameObject.transform.rotation = boid.rotation;
+                var tr = boid.gameObject.transform;
+                tr.position = boid.position;
+                tr.rotation = boid.rotation;
             }
         }
 
